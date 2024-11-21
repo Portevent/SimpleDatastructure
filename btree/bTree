@@ -1,0 +1,125 @@
+from typing import List
+
+from btree.arianne import Arianne
+from data.data import Data
+
+
+class BTree:
+    min_element: int
+    max_element: int
+
+    children: List['BTree'] | List[None]
+    elements: List[Data | None]
+    size: int
+    leaf: bool
+
+    parent: 'BTree'
+
+    def __init__(self, min_element: int, max_element: int):
+        self.min_element = min_element
+        self.max_element = max_element
+        self.elements = [None] * (self.max_element + 1)
+        self.size = 0
+        self.leaf = True
+        self.parent = None
+
+    def fetch(self, data: Data) -> Data | None:
+        i = 0
+
+        while i < self.size:
+            if data == self.elements[i]:
+                return self.elements[i]
+
+            if data < self.elements[i]:
+                break
+
+            i += 1
+
+        return None if self.leaf else self.children[i].fetch(data)
+
+    def insert(self, data: Data):
+        self._insert(data, Arianne(0))
+        return self._get_parent()
+
+    def _insert(self, data: Data, arianne: Arianne):
+        i = 0
+
+        while i < self.size:
+            if data < self.elements[i]:
+                break
+
+            i += 1
+
+        if self.leaf:
+            self._push(i, data, arianne)
+        else:
+            self.children[i]._insert(data, arianne.next(i))
+
+    def _push(self, i: int, data: Data, arianne: Arianne):
+
+        for j in range(self.size, i, -1):
+            self.elements[j] = self.elements[j - 1]
+
+        self.elements[i] = data
+        self.size += 1
+
+        if self.size > self.max_element:
+            self._slice_to_parent(arianne)
+
+    def _slice_to_parent(self, arianne: Arianne):
+        if self.parent is None:
+            self.parent = BTree(self.min_element, self.max_element)
+            self.parent._to_node()
+
+        index: int = self.size // 2
+
+        middle_element: Data = self.elements[index]
+
+        new_child = BTree(self.min_element, self.max_element)
+
+        if not self.leaf:
+            new_child._to_node()
+            new_child._set_children(self.children[index + 1:], self.size - index)
+            self._set_children(self.children[:index + 1], index + 1)
+
+        new_child._set_elements(self.elements[index + 1:], self.size - index - 1)
+        new_child.parent = self.parent
+        self._set_elements(self.elements[:index], index)
+
+        self.parent._add_cherry(arianne, middle_element, self, new_child)
+
+    def _push_in_children(self, i: int, child_a: 'BTree', child_b: 'BTree'):
+
+        for j in range(self.size + 1, i, -1):
+            self.children[j] = self.children[j - 1]
+
+        self.children[i] = child_a
+        self.children[i + 1] = child_b
+
+    def _add_cherry(self, arianne: Arianne, element: Data, child_a: 'BTree', child_b: 'BTree'):
+
+        self._push_in_children(arianne.get(), child_a, child_b)
+        self._push(arianne.get(), element, arianne.parent())
+
+    def _to_node(self):
+        self.leaf = False
+        self.children = [None] * (self.max_element + 2)
+
+    def _get_parent(self) -> 'BTree':
+        return self.parent._get_parent() if self.parent else self
+
+    def _set_elements(self, elements: List[Data], size: int):
+        self.size = size or len(elements)
+        for i in range(self.max_element + 1):
+            self.elements[i] = elements[i] if i < size else None
+
+    def _set_children(self, children: List['BTree'], size: int):
+        for i in range(self.max_element + 2):
+            if i < size:
+                children[i].parent = self
+                self.children[i] = children[i]
+            else:
+                self.children[i] = None
+
+    def __repr__(self):
+        return f"[{' '.join([str(element) for element in self.elements])}]"
